@@ -1,0 +1,407 @@
+---
+title: "DS Notes(print)"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(plyr)
+library(caTools)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+linear regression
+  dependent variable is called  labels
+  variable is called feature
+  transformation is called feature creation <- run through equation for scale change
+  can use quadratic equation to represent multiple variables in linear regression <- transformation
+  types of regression
+    simple     - y=mx+b <- will never need to scale
+    multiple   - y=m1x1+m2x2+...+mnxn+b <- linear relationship btwn terms -multiple independent variables
+    polynomial - y=b+m1x^1+m2x^2...mnx^n - one independent variable
+
+Data Pre-processing
+```{r}
+dataset = read.csv("Data.csv")
+
+#set county as a factor
+dataset$Country = as.factor(dataset$Country)
+#set purchased as factor
+dataset$Purchased = as.factor(dataset$Purchased)
+
+#ifelse(test, yes, no) - use for predictor variables
+dataset$Age = ifelse(test = is.na(dataset$Age),
+                     yes = mean(dataset$Age, na.rm = TRUE),
+                     no = dataset$Age)
+#no is required to run
+#na.rm = TRUE removes all NA values from the mean
+#if variable is target, remove N/A instead of mean:
+dataset <- na.omit(dataset)
+
+#install.packages('caTools')
+library(caTools)
+#selecting random selection for better comparison between different runs
+set.seed(123)
+#splitting dataset - creates a model accurate for other data bases what it was created with
+##split before scaling for more accurate training/test sets (accurate means shows true trends)
+split = sample.split(dataset$Purchased, SplitRatio = 0.8) #split ratio should be higher than 2/3
+training_set = subset(dataset, split == TRUE) #create model
+test_set = subset(dataset, split == FALSE) #checks if model is good for data is wasn't created with
+
+#feature scaling - equalizes all features/variables in dataset - use when non-linear
+dataset$Age_scaled = scale(dataset$Age)
+dataset$Salary_scaled = scale(dataset$Salary)
+
+# Data Discretization
+# breaks can = the left and right hand end points for the bins OR can be # of bins
+dataset$SalaryBins = cut(dataset$Salary, 
+                         breaks = c(0, 40000, 70000, 110000), 
+                         labels = c('low', 'mid', 'high') )
+
+#dates
+example = data.frame(Date = c('1/2/1998', '1/27/1999', '2/12/2001'))
+str(example)
+example$Date = as.Date(example$Date, format = '%m/%d/%Y') #Y is for 1999, y is for 99
+example$year = format(example$Date, format = '%Y')
+example$month = format(example$Date, format = '%m')
+
+#table - gives count of integers 
+table(dataset$Salary)
+```
+
+EDA (Exploratory Data Analysis)
+```{r}
+#EDA at beginning for data comprehension vs Data Visualization at the end to show others
+#gglot2
+library(ggplot2)
+
+#scatterplot - compare exact point (x and y matter)
+plotS <- ggplot()+ #only need to place in object if going to add legend
+  geom_point(data = dataset, aes(Age,Salary, colour = Purchased))+
+  xlab("Age(years)")+ #x axis
+  ylab("Salary($)")+  #y axis
+  ggtitle("Age vs Salary and if Purchased") #graph title
+plotS + labs(colour = "Purchased") #legend title
+
+#line graph - compare a change - good for time
+ggplot()+
+  geom_line(data = dataset, aes(Age,Salary))+
+  xlab("Age(years)")+ #x axis
+  ylab("Salary($)")+  #y axis
+  ggtitle("Age vs Salary") #graph title
+
+#bar graph - compare total amounts
+plotB <- ggplot()+
+  geom_col(data = dataset, aes(Age,Salary,fill = Country))+
+  xlab("Age(years)")+ #x axis
+  ylab("Salary($)")+  #y axis
+  ggtitle("Age vs Salary by Country") #graph title
+plotB +labs(fill = "Countries")
+
+#histogram - compare frequencies
+ggplot(data = dataset, aes(Age))+ #include data info with ggplot
+  geom_histogram(binwidth = 4)+ #controls width of col
+  xlab("Age(years)")+ #x axis
+  ylab("Frequency")+  #y axis
+  ggtitle("Age Frequency") #graph title
+
+#boxplot - compare data from multiple sets
+plotX <- ggplot()+
+  geom_boxplot(data = dataset, aes(Salary,Age, fill = Country))+
+  xlab("Salary")+ #x axis
+  ylab("Age")+  #y axis
+  ggtitle("Age vs Salary by Country") #graph title
+plotX + labs(fill = "Countries")
+  #interaction allowed a factor to be added into box plot - not a good dataset to show this
+plotX <- ggplot()+
+  geom_boxplot(data = dataset, aes(interaction(Salary,Purchased),Age, fill = Country))
+plotX + labs(fill = "Countries")
+
+
+#Data Transformation
+#install.packages("dplyr")
+library(dplyr)
+#changing variable to a function ex. x becomes log(x)
+
+#Scatterplot Matrices
+
+
+#Summary for mean, min, max, quartiles, and outliers
+summary(dataset) #shows mean, min, max and quartiles. 
+#compare quartiles to min/max; if sig diff, use histogram to further determine if there are outliers 
+```
+
+Simple Linear Regression
+```{r}
+#data must be split already, no feature scaling required bc linear
+# Fitting Simple Linear Regression to the Training set
+regressor = lm(formula = Salary ~ Age,
+               data = training_set)
+
+# Predicting the Test set results
+y_pred = predict(regressor, newdata = test_set)
+
+# Visualizing the Training set results
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = training_set$Age, y = training_set$Salary), colour = 'red') +
+  geom_line(aes(x = training_set$Age, y = predict(regressor, newdata = training_set)), colour = 'blue') +
+  ggtitle('Salary vs Age (Training set)') +
+  xlab('Age') +
+  ylab('Salary')
+
+# Visualizing the Test set results
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = test_set$Age, y = test_set$Salary), colour = 'red') +
+  geom_line(aes(x = training_set$Age, y = predict(regressor, newdata = training_set))
+            , colour = 'blue') + #use training set values for here
+  ggtitle('Salary vs Age (Test set)') +
+  xlab('Age') +
+  ylab('Salary')
+```
+
+Multiple Linear Regression
+```{r}
+#using different data
+dataset = read.csv('50_Startups.csv')
+str(dataset)
+#data must be appropriately set as factors and split, no feature scaling bc still linear
+#set factor(s)
+dataset$State = factor(dataset$State)
+str(dataset)
+#split
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$Profit, SplitRatio = 0.8)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+
+# Fitting Multiple Linear Regression to the Training set
+regressor = lm(formula = Profit ~ ., #~. means all variables
+               data = training_set)
+# Check out the p-values for each independent variables
+summary(regressor)
+# Which variable seems to be the most important? - R.D. Spent has the sig p val
+
+#Perform Backwards Elimination
+#State has the largest p val so remove State
+regressor = lm(formula = Profit ~ R.D.Spend + Administration + Marketing.Spend,
+               data = training_set)
+summary(regressor)
+#Administration has the largest p val so remove Administration
+regressor = lm(formula = Profit ~ R.D.Spend  + Marketing.Spend,
+               data = training_set)
+summary(regressor)
+#Marketing Spend became more sig as factors were removed - will still remove bc >0.05 but is judgement call
+regressor = lm(formula = Profit ~ R.D.Spend,
+               data = training_set)
+summary(regressor)
+#all p val <0.05 - final form
+
+
+# Predicting the Test set results
+y_pred = predict(regressor, newdata = test_set)
+
+#can go on to visualize prediction for specific factors
+```
+
+Polynomial Linear Regression
+```{r}
+#using different data
+dataset = read.csv('Position_Salaries.csv')
+#no splitting or feature scaling
+
+# Fitting Linear Regression to the dataset
+lin_reg = lm(formula = Salary ~ Level,
+             data = dataset)
+
+# Fitting Polynomial Regression to the dataset - better
+poly_reg <- lm(formula = Salary ~ poly(Level,3), #salary is target, level is predictor
+               data = dataset)
+#compare linear vs polynomial regressions
+summary(lin_reg)
+summary(poly_reg) #poly is better looking at r vals bc closer to 1
+
+# Visualizing the Linear Regression results
+# install.packages('ggplot2')
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = dataset$Level, y = dataset$Salary), color = 'red') +
+  geom_line(aes(x = dataset$Level, y = predict(lin_reg, newdata = dataset)), color = 'blue') +
+  ggtitle('Truth or Bluff (Linear Regression)') +
+  xlab('Level') +
+  ylab('Salary')
+
+# Visualizing the Polynomial Regression results
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = dataset$Level, y = dataset$Salary), color = 'red') +
+  geom_line(aes(x = dataset$Level, y = predict(poly_reg, newdata = dataset)), color = 'blue') +
+  ggtitle('Truth or Bluff (Polynomial Regression)') +
+  xlab('Level') +
+  ylab('Salary')
+
+# Predicting a new result with Linear Regression
+predict(lin_reg, data.frame(Level = 7.5))
+
+# Predicting a new result with Polynomial Regression
+
+predict(poly_reg, data.frame(Level = 7.5))
+```
+
+Logistic Regression
+```{r}
+#using different data
+dataset = read.csv('Social_Network_Ads.csv')
+str(dataset)
+#splitting and feature scaling are performed
+#splitting
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$Purchased, SplitRatio = 0.75)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+#feature scaling
+training_set[-3] = scale(training_set[-3])
+test_set[-3] = scale(test_set[-3])
+
+# Fitting Logistic Regression to the Training set
+library(VGAM)
+classifier = glm(formula = Purchased ~ .,
+                 family = binomial, 
+                 data = training_set)
+# anytime youre doing logistic regression with 2 possible outcomes,
+# you need family = binomial. If you have more than 2 categories,
+# you will need the  VGAM package and use vglm function with family = multinomial
+
+# Predicting the Test set results
+prob_pred = predict(classifier, type = 'response', newdata = test_set[-3])
+y_pred = ifelse(prob_pred > 0.5, 1, 0)
+
+# Making the Confusion Matrix
+#install.packages('e1071')
+library(e1071)
+#install.packages('caret')
+library(caret)
+
+#make confusion matrix predictors be facots
+test_set$Purchased <- factor(test_set$Purchased)
+y_pred <- factor(y_pred)
+
+#make confusion matrix
+confusionMatrix(y_pred, test_set$Purchased) #same length
+
+# Making the Confusion Matrix
+cm = table(test_set[, 3], y_pred) #shows the actual table 
+# 0 - no, 1 - yes, top - predicted, side - actual
+
+library(ElemStatLearn)
+
+# Visualising the Training set results
+set = training_set
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+prob_set = predict(classifier, type = 'response', newdata = grid_set)
+y_grid = ifelse(prob_set > 0.5, 1, 0)
+plot(set[, -3],
+     main = 'Logistic Regression (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+
+# Visualising the Test set results
+set = test_set
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+prob_set = predict(classifier, type = 'response', newdata = grid_set)
+y_grid = ifelse(prob_set > 0.5, 1, 0)
+plot(set[, -3],
+     main = 'Logistic Regression (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+KNN Classifier
+```{r}
+#using same data but just resetting
+dataset = read.csv('Social_Network_Ads.csv')
+#split and feature scale
+#split
+# install.packages('caTools')
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$Purchased, SplitRatio = 0.75)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+#feature scale
+training_set[-3] = scale(training_set[-3])
+test_set[-3] = scale(test_set[-3])
+
+# Fitting K-NN to the Training set and Predicting the Test set results
+library(class)
+y_pred = knn(train = training_set[, -3],
+             test = test_set[, -3],
+             cl = training_set[, 3],
+             k = 5,
+             prob = TRUE)
+
+# Making the Confusion Matrix
+#install.packages('caret')
+library(caret)
+#install.packages('e1071')
+library(e1071)
+#make factors
+test_set$Purchased <- factor(test_set$Purchased)
+y_pred <- factor(y_pred)
+#print matrix
+confusionMatrix(test_set$Purchased, y_pred)
+
+# Visualising the Training set results
+library(ElemStatLearn)
+set = training_set
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = knn(train = training_set[, -3], test = grid_set, cl = training_set[, 3], k = 5)
+plot(set[, -3],
+     main = 'K-NN (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+
+# Visualising the Test set results
+library(ElemStatLearn)
+set = test_set
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = knn(train = training_set[, -3], test = grid_set, cl = training_set[, 3], k = 5)
+plot(set[, -3],
+     main = 'K-NN (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
